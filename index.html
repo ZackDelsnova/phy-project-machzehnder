@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mach–Zehnder Interferometer</title>
+<style>
+  :root{
+    --bg: #0b0f14;
+    --card: #0f1720;
+    --muted: #9aa7b2;
+    --accent: #ff6b6b;
+    --accent2: #4dd0e1;
+    --panel: rgba(255,255,255,0.03);
+    --glass: rgba(255,255,255,0.04);
+  }
+  html,body{height:100%; margin:0; font-family:Inter,ui-sans-serif,system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:#e6f0f2;}
+  .wrap { display:flex; gap:18px; padding:18px; box-sizing:border-box; height:100vh; }
+  .left {
+    flex: 1.2;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.015));
+    border-radius:12px;
+    padding:12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+    display:flex; flex-direction:column;
+  }
+  .title { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  h1{ font-size:16px; margin:6px 0; font-weight:600; color:#f0f7f8; }
+  .canvas-area { flex:1; display:flex; align-items:center; justify-content:center; padding:8px; }
+  canvas { border-radius:8px; background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.5)); box-shadow: inset 0 -12px 30px rgba(0,0,0,0.6); }
+  .controls { margin-top:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .ctrl { background:var(--panel); padding:10px; border-radius:10px; min-width:230px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+  .ctrl label{ display:block; color:var(--muted); font-size:12px; margin-bottom:6px; }
+  input[type=range]{ width:100%; }
+  .val { float:right; font-weight:700; color:#fff; margin-left:8px; }
+  .btn { background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); padding:8px 10px; border-radius:8px; cursor:pointer; }
+  .btn:hover{ color:#fff; border-color:rgba(255,255,255,0.12); }
+
+  .right {
+    flex: .7;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:12px;
+    padding:14px;
+    display:flex; flex-direction:column;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    min-width:320px;
+  }
+  .info-title { font-size:13px; color:#dff6f9; margin-bottom:8px; }
+  .info { background:var(--glass); padding:12px; border-radius:10px; color:var(--muted); flex:1; overflow:auto; }
+  .comp-name { font-weight:700; color:#fff; font-size:14px; margin-bottom:6px; }
+  .comp-desc { font-size:13px; line-height:1.45; color:#dfeef0; }
+  .hint { margin-top:10px; color:var(--muted); font-size:12px; }
+  .legend { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .legend .item{ display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); }
+  .dot{ width:10px; height:10px; border-radius:50%; box-shadow:0 0 8px rgba(255,255,255,0.02) inset; }
+
+  /* small responsive tweak */
+  @media (max-width:920px){
+    .wrap{ flex-direction:column; padding:12px; }
+    .left, .right { min-height:300px; width:100%; }
+    .right{ order:2; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="left">
+      <div class="title">
+        <h1>Mach–Zehnder Interferometer</h1>
+        <div style="color:var(--muted); font-size:13px">Click or hover a component → info updates</div>
+      </div>
+
+      <div class="canvas-area">
+        <canvas id="sim" width="920" height="520"></canvas>
+      </div>
+
+      <div class="controls" role="group" aria-label="controls">
+        <div class="ctrl">
+          <label>Direct Phase φ (radians) <span id="phiVal" class="val">0.00</span></label>
+          <input id="phi" type="range" min="0" max="628" step="1" value="0">
+        </div>
+
+        <div class="ctrl">
+          <label>Temperature (°C) — simulates refractive index change <span id="tempVal" class="val">25</span></label>
+          <input id="temp" type="range" min="0" max="100" step="1" value="25">
+        </div>
+
+        <div class="ctrl">
+          <label>Voltage (V) — simulates electro-optic modulation <span id="voltVal" class="val">0</span></label>
+          <input id="volt" type="range" min="0" max="10" step="0.1" value="0">
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button id="resetBtn" class="btn">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="info-title">Component Info (hover or click any part)</div>
+      <div id="info" class="info">
+        <div class="comp-name">Welcome — Mach–Zehnder Interferometer</div>
+        <div class="comp-desc">
+          This interactive demo shows how splitting and recombining light with a phase difference causes interference.
+          Hover or click components (Laser, Beam Splitters, Mirrors, Paths, Detectors) to see short explanations.
+          Use the sliders to change the phase — Temperature and Voltage simulate real-world ways the phase can be changed.
+        </div>
+
+        <div class="hint">Quick tips: drag sliders to see detectors trade brightness. Click components to lock the panel.</div>
+
+        <div class="legend" style="margin-top:12px;">
+          <div class="item"><div class="dot" style="background:rgba(255,80,80,0.9); box-shadow:0 0 12px rgba(255,80,80,0.6)"></div> Light beam</div>
+          <div class="item"><div class="dot" style="background:#78d6e0; box-shadow:0 0 10px rgba(120,214,224,0.25)"></div> Phase marker</div>
+          <div class="item"><div class="dot" style="background:#fff; box-shadow:0 0 10px rgba(255,255,255,0.06)"></div> Mirror / splitter</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px; font-size:13px; color:var(--muted)">
+        <div><strong>Detector readout</strong></div>
+        <div id="readouts" style="margin-top:8px;">
+          <div>D1: <span id="I1">0.00</span></div>
+          <div>D2: <span id="I2">0.00</span></div>
+          <div style="margin-top:8px; font-size:12px; color:var(--muted)">Physics (intensity): I1 = cos²(φ/2), I2 = sin²(φ/2) where φ is total phase difference</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ========= Simulation variables & geometry ========= */
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+
+const W = canvas.width, H = canvas.height;
+
+// Basic geometry: positions for components
+// Left incoming laser at x=80
+const laser = { x: 80, y: H/2 };
+
+// Beam splitter 1 at center-left
+const bs1 = { x: 260, y: H/2, size: 36 };
+// Mirror positions
+const m1 = { x: 420, y: H/2 - 150 }; // top mirror
+const m2 = { x: 420, y: H/2 + 150 }; // bottom mirror
+// Beam splitter 2 at center-right
+const bs2 = { x: 580, y: H/2, size: 36 };
+
+// Detectors
+const d1 = { x: 760, y: H/2 - 90, r: 24 }; // top output
+const d2 = { x: 760, y: H/2 + 90, r: 24 }; // bottom output
+
+// Define clickable components for hover/click detection
+const components = [
+  { id: 'laser', name: 'Laser Source', x: laser.x, y: laser.y, r: 28 },
+  { id: 'bs1', name: 'Beam Splitter 1', x: bs1.x, y: bs1.y, r: 32 },
+  { id: 'm1', name: 'Mirror M1 (top)', x: m1.x, y: m1.y, r: 28 },
+  { id: 'm2', name: 'Mirror M2 (bottom)', x: m2.x, y: m2.y, r: 28 },
+  { id: 'bs2', name: 'Beam Splitter 2', x: bs2.x, y: bs2.y, r: 32 },
+  { id: 'd1', name: 'Detector D1 (top)', x: d1.x, y: d1.y, r: d1.r },
+  { id: 'd2', name: 'Detector D2 (bottom)', x: d2.x, y: d2.y, r: d2.r }
+];
+
+// Particles that represent traveling light (will be recycled)
+const particles = [];
+const MAX_PARTICLES = 120; // number of moving dots for beams
+
+// sim state
+let lockedInfo = null; // if user clicked a component, lock info panel
+let hoverComp = null;
+
+// Controls
+const phiSlider = document.getElementById('phi');
+const tempSlider = document.getElementById('temp');
+const voltSlider = document.getElementById('volt');
+const phiVal = document.getElementById('phiVal');
+const tempVal = document.getElementById('tempVal');
+const voltVal = document.getElementById('voltVal');
+
+const I1span = document.getElementById('I1');
+const I2span = document.getElementById('I2');
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  phiSlider.value = 0; tempSlider.value = 25; voltSlider.value = 0;
+  updateVals();
+});
+
+// initialize particles along two paths
+function initParticles(){
+  particles.length = 0;
+  for (let i=0;i<MAX_PARTICLES;i++){
+    // alternate top/bottom stream
+    const t = (i % 2 === 0) ? 'top' : 'bottom';
+    particles.push({ path: t, progress: Math.random(), speed: 0.35 + Math.random()*0.6, hue: 0});
+  }
+}
+initParticles();
+
+/* ========= Helper functions ========= */
+function clamp(a,min,max){ return Math.max(min, Math.min(max,a)); }
+function dist(x1,y1,x2,y2){ return Math.hypot(x2-x1, y2-y1); }
+
+/* ========= Map UI to physics ========= */
+function computeTotalPhase(){
+  // direct phi slider in hundredths
+  const phi_direct = parseInt(phiSlider.value)/100.0; // 0..6.28
+  const temp = parseFloat(tempSlider.value); // 0..100 °C
+  const volt = parseFloat(voltSlider.value); // 0..10 V
+
+  // Map temperature to up to π radians shift (empirical mapping for demo)
+  const phi_temp = (temp/100.0) * Math.PI;
+
+  // Map voltage to up to 2π rad (electro-optic)
+  const phi_volt = (volt/10.0) * 2*Math.PI;
+
+  // total
+  let phi = phi_direct + phi_temp + phi_volt;
+  // keep in 0..2π
+  phi = phi % (2*Math.PI);
+  return phi;
+}
+
+/* intensities based on simple MZI formula */
+function detectorIntensities(phi){
+  const I1 = Math.cos(phi/2) * Math.cos(phi/2);
+  const I2 = Math.sin(phi/2) * Math.sin(phi/2);
+  return { I1, I2 };
+}
+
+/* ========= Drawing utilities ========= */
+
+function drawScene(){
+  ctx.clearRect(0,0,W,H);
+  // subtle background glow
+  const g = ctx.createLinearGradient(0,0,W,H);
+  g.addColorStop(0, 'rgba(255,255,255,0.01)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  drawComponents();
+  drawBeams();
+  drawParticles();
+  drawLabels();
+  drawDetectors();
+}
+
+function drawComponents(){
+  // beam splitter 1 (rotated diamond)
+  ctx.save();
+  ctx.translate(bs1.x, bs1.y);
+  ctx.rotate(Math.PI/4);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(-bs1.size/2, -bs1.size/2, bs1.size, bs1.size);
+  ctx.restore();
+
+  // beam splitter 2
+  ctx.save();
+  ctx.translate(bs2.x, bs2.y);
+  ctx.rotate(Math.PI/4);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(-bs2.size/2, -bs2.size/2, bs2.size, bs2.size);
+  ctx.restore();
+
+  // mirrors as rounded rectangles
+  drawMirror(m1.x, m1.y);
+  drawMirror(m2.x, m2.y);
+
+  // Laser source (circle + short beam)
+  ctx.beginPath();
+  ctx.fillStyle = '#ffb3b3';
+  ctx.shadowColor = 'rgba(255,80,80,0.9)';
+  ctx.shadowBlur = 18;
+  ctx.arc(laser.x, laser.y, 12, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // frame for detectors
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(255,255,255,0.02)';
+  ctx.fillRect(d1.x-40, d1.y-40, 80, 80);
+  ctx.fillRect(d2.x-40, d2.y-40, 80, 80);
+}
+
+function drawMirror(x,y){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(-Math.PI/12);
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  roundRect(ctx, -28, -12, 56, 24, 6, true, false);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+  if (r === undefined) r = 5;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+/* Draw continuous beams as soft glowing paths */
+function drawBeams(){
+  const phi = computeTotalPhase();
+  // color intensity varies slightly with phase markers
+  const col = 'rgba(255,100,100,0.9)';
+
+  // left to bs1
+  drawGlowLine(laser.x+12, laser.y, bs1.x-18, bs1.y, 8, col);
+
+  // bs1 splits: straight to bs2 (lower path) and up to top mirror (top path)
+  // part A: straight path from bs1 to bs2 (lower path)
+  drawGlowLine(bs1.x+12, bs1.y, bs2.x-18, bs2.y, 6, col);
+
+  // top path: bs1 -> m1 -> bs2
+  drawGlowLine(bs1.x, bs1.y-18, m1.x-14, m1.y+10, 6, col); // up
+  drawGlowLine(m1.x+14, m1.y+6, bs2.x-8, bs2.y-18, 6, col); // down to bs2
+
+  // bottom path: bs1 -> m2 -> bs2
+  drawGlowLine(bs1.x, bs1.y+18, m2.x-14, m2.y-10, 6, col);
+  drawGlowLine(m2.x+14, m2.y-6, bs2.x-8, bs2.y+18, 6, col);
+
+  // outputs from bs2 to detectors
+  // top output
+  drawGlowLine(bs2.x+18, bs2.y-18, d1.x-36, d1.y, 8, col);
+  // bottom output
+  drawGlowLine(bs2.x+18, bs2.y+18, d2.x-36, d2.y, 8, col);
+
+  // draw small phase highlight in top arm to indicate "where phase is changing"
+  const temp = parseFloat(tempSlider.value);
+  const volt = parseFloat(voltSlider.value);
+  const phaseMarkerAlpha = 0.4 + (temp/100)*0.6 + (volt/10)*0.4;
+  ctx.beginPath();
+  ctx.fillStyle = `rgba(120,214,224,${0.12 + phaseMarkerAlpha*0.08})`;
+  ctx.arc((bs1.x+m1.x)/2, (bs1.y+m1.y)/2 - 8, 18, 0, Math.PI*2);
+  ctx.fill();
+}
+
+/* Draw particles (moving dots) that follow paths to show direction */
+function drawParticles(){
+  const phi = computeTotalPhase();
+  // move particles along their path
+  for (let p of particles){
+    p.progress += p.speed * 0.002;
+    if (p.progress > 1.0) p.progress = 0;
+
+    // path points - build spline of path for top/bottom
+    const pathPoints = (p.path === 'top') ? topPathPoints() : bottomPathPoints();
+    // compute position along polyline
+    const pos = pointOnPolyline(pathPoints, p.progress);
+    if (!pos) continue;
+
+    // color pulses more intensely when phase causes constructive interference on that output
+    const phase = phi;
+    const {I1, I2} = detectorIntensities(phase);
+    // choose hue based on path and output
+    let alpha = 0.75;
+    // fade when near beam splitter / mirror transitions
+    const size = 4 + (Math.sin(Date.now()/200 + p.progress*20)*0.8);
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,120,120,${alpha})`;
+    ctx.shadowColor = 'rgba(255,90,90,0.9)';
+    ctx.shadowBlur = 6;
+    ctx.arc(pos.x, pos.y, size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+/* Helper: returns array of points (x,y) representing top path polyline */
+function topPathPoints(){
+  return [
+    {x: laser.x+12, y: laser.y},
+    {x: bs1.x, y: bs1.y - 18},
+    {x: m1.x - 14, y: m1.y + 10},
+    {x: m1.x + 14, y: m1.y + 6},
+    {x: bs2.x - 8, y: bs2.y - 18},
+    {x: bs2.x + 12, y: bs2.y - 18},
+    {x: d1.x - 36, y: d1.y}
+  ];
+}
+
+/* Helper: bottom path */
+function bottomPathPoints(){
+  return [
+    {x: laser.x+12, y: laser.y},
+    {x: bs1.x, y: bs1.y + 18},
+    {x: m2.x - 14, y: m2.y - 10},
+    {x: m2.x + 14, y: m2.y - 6},
+    {x: bs2.x - 8, y: bs2.y + 18},
+    {x: bs2.x + 12, y: bs2.y + 18},
+    {x: d2.x - 36, y: d2.y}
+  ];
+}
+
+/* Given polyline points and t in [0,1], return interpolated point */
+function pointOnPolyline(points, t){
+  if (!points || points.length<2) return null;
+  // compute total lengths
+  const segLens = [];
+  let total = 0;
+  for (let i=0;i<points.length-1;i++){
+    const l = dist(points[i].x, points[i].y, points[i+1].x, points[i+1].y);
+    segLens.push(l); total += l;
+  }
+  let target = t * total;
+  for (let i=0;i<segLens.length;i++){
+    if (target <= segLens[i]){
+      const a = points[i], b = points[i+1];
+      const frac = target / segLens[i];
+      const x = a.x + (b.x - a.x)*frac;
+      const y = a.y + (b.y - a.y)*frac;
+      return {x,y};
+    }
+    target -= segLens[i];
+  }
+  // fallback last point
+  return points[points.length-1];
+}
+
+/* draw soft glowing line between two points */
+function drawGlowLine(x1,y1,x2,y2, thickness=6, color='rgba(255,120,120,0.9)'){
+  // draw several strokes for glow
+  for (let i=6;i>0;i--){
+    ctx.beginPath();
+    ctx.strokeStyle = color.replace('0.9', (0.06*i).toFixed(2));
+    ctx.lineWidth = thickness + i*2;
+    ctx.lineCap = 'round';
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+  }
+  // core line
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+}
+
+/* draw labels near components */
+function drawLabels(){
+  ctx.font = '12px Inter, Arial';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText('Laser', laser.x-28, laser.y-18);
+  ctx.fillText('Beam Splitter 1', bs1.x-48, bs1.y-36);
+  ctx.fillText('Mirror M1', m1.x-36, m1.y-170);
+  ctx.fillText('Mirror M2', m2.x-36, m2.y+170);
+  ctx.fillText('Beam Splitter 2', bs2.x-54, bs2.y-36);
+  ctx.fillText('Detector D1', d1.x-30, d1.y-40);
+  ctx.fillText('Detector D2', d2.x-30, d2.y+60);
+}
+
+/* draw detectors with brightness proportional to intensity */
+function drawDetectors(){
+  const phi = computeTotalPhase();
+  const {I1, I2} = detectorIntensities(phi);
+  // top detector
+  ctx.beginPath();
+  const grad1 = ctx.createRadialGradient(d1.x, d1.y, 4, d1.x, d1.y, 40);
+  grad1.addColorStop(0, `rgba(255,160,160,${0.6*I1 + 0.15})`);
+  grad1.addColorStop(1, 'rgba(255,100,100,0.03)');
+  ctx.fillStyle = grad1;
+  ctx.arc(d1.x, d1.y, d1.r+6, 0, Math.PI*2);
+  ctx.fill();
+  // rim
+  ctx.beginPath();
+  ctx.strokeStyle = `rgba(255,100,100,${0.5*I1 + 0.1})`;
+  ctx.lineWidth = 2;
+  ctx.arc(d1.x, d1.y, d1.r, 0, Math.PI*2);
+  ctx.stroke();
+
+  // bottom detector
+  ctx.beginPath();
+  const grad2 = ctx.createRadialGradient(d2.x, d2.y, 4, d2.x, d2.y, 40);
+  grad2.addColorStop(0, `rgba(255,140,120,${0.6*I2 + 0.15})`);
+  grad2.addColorStop(1, 'rgba(255,80,70,0.02)');
+  ctx.fillStyle = grad2;
+  ctx.arc(d2.x, d2.y, d2.r+6, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.strokeStyle = `rgba(255,80,80,${0.5*I2 + 0.08})`;
+  ctx.lineWidth = 2;
+  ctx.arc(d2.x, d2.y, d2.r, 0, Math.PI*2);
+  ctx.stroke();
+
+  I1span.textContent = I1.toFixed(2);
+  I2span.textContent = I2.toFixed(2);
+}
+
+/* ========= Interaction: hover & click ========= */
+
+let mouse = {x:0,y:0};
+canvas.addEventListener('mousemove', (e)=>{
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  if (!lockedInfo) {
+    updateHoverComponent();
+  }
+});
+
+canvas.addEventListener('click', (e)=>{
+  if (hoverComp){
+    lockedInfo = hoverComp.id === lockedInfo ? null : hoverComp.id; // toggle lock
+    updateInfoPanel(hoverComp.id);
+  } else {
+    lockedInfo = null;
+    updateInfoPanel(null);
+  }
+});
+
+canvas.addEventListener('mouseleave', ()=>{
+  if (!lockedInfo){
+    hoverComp = null;
+    updateInfoPanel(null);
+  }
+});
+
+function updateHoverComponent(){
+  hoverComp = null;
+  for (let c of components){
+    const d = dist(mouse.x, mouse.y, c.x, c.y);
+    if (d < c.r + 10){
+      hoverComp = c;
+      updateInfoPanel(c.id);
+      return;
+    }
+  }
+  updateInfoPanel(null);
+}
+
+/* update info panel content based on id (or null) */
+const infoDiv = document.getElementById('info');
+function updateInfoPanel(id){
+  if (lockedInfo && id !== lockedInfo) id = lockedInfo;
+  if (!id){
+    // default welcome
+    infoDiv.innerHTML = `<div class="comp-name">Mach–Zehnder Interferometer</div>
+      <div class="comp-desc">Hover or click a component to see a short explanation. Use sliders to change phase: Temperature and Voltage simulate real-world ways to change the optical phase.</div>
+      <div class="hint">Tip: click a component to lock the explanation while you manipulate sliders.</div>
+      <div class="legend" style="margin-top:12px;">
+        <div class="item"><div class="dot" style="background:rgba(255,80,80,0.9); box-shadow:0 0 12px rgba(255,80,80,0.6)"></div> Light beam</div>
+        <div class="item"><div class="dot" style="background:#78d6e0; box-shadow:0 0 10px rgba(120,214,224,0.25)"></div> Phase indicator</div>
+      </div>`;
+    return;
+  }
+
+  // component-specific messages
+  const msgs = {
+    'laser': {
+      title: 'Laser Source',
+      desc: 'This is the incoming coherent light source. It emits a steady beam that enters the interferometer. In real experiments this would be a laser.'
+    },
+    'bs1': {
+      title: 'Beam Splitter 1',
+      desc: 'Splits the incoming beam into two equal parts: one continues straight, the other is reflected upward. This creates the two separate paths (arms) of the interferometer.'
+    },
+    'm1': {
+      title: 'Mirror M1 (top arm)',
+      desc: 'Reflects the top beam and redirects it toward Beam Splitter 2. Mirrors control the path length; small changes here affect the phase.'
+    },
+    'm2': {
+      title: 'Mirror M2 (bottom arm)',
+      desc: 'Reflects the bottom beam and redirects it toward Beam Splitter 2. If M2 is moved slightly, it changes the optical path length and thus the phase.'
+    },
+    'bs2': {
+      title: 'Beam Splitter 2 (Recombination)',
+      desc: 'The two beams meet and recombine here. Depending on their relative phase, they will interfere constructively or destructively — sending light to one detector more than the other.'
+    },
+    'd1': {
+      title: 'Detector D1 (top output)',
+      desc: 'Measures the intensity of the top output. Its brightness depends on the phase difference φ: I1 = cos²(φ/2). When constructive interference occurs for this port, D1 lights up.'
+    },
+    'd2': {
+      title: 'Detector D2 (bottom output)',
+      desc: 'Measures the intensity of the bottom output. Its brightness is I2 = sin²(φ/2). D2 brightens when the phase causes constructive interference in the bottom port.'
+    }
+  };
+
+  const m = msgs[id];
+  if (m){
+    infoDiv.innerHTML = `<div class="comp-name">${m.title}</div>
+      <div class="comp-desc">${m.desc}</div>
+      <div style="margin-top:10px; font-size:13px; color:var(--muted)">
+        <strong>Why it matters:</strong>
+        ${explainRealWorld(id)}
+      </div>`;
+  } else {
+    infoDiv.innerHTML = `<div class="comp-name">Unknown</div><div class="comp-desc">No information available.</div>`;
+  }
+}
+
+/* small helper to add real-world tie-ins */
+function explainRealWorld(id){
+  switch(id){
+    case 'laser': return 'A stable laser is used in telecom and sensing. Coherence is important for clear interference.';
+    case 'bs1': return 'Beam splitters are basic optical components in many sensors and modulators.';
+    case 'm1': case 'm2': return 'High-precision mirrors or fiber delays change path length, used in sensors and interferometric measurement.';
+    case 'bs2': return 'Recombination and interference is how modulators encode data or sense changes in phase.';
+    case 'd1': case 'd2': return 'Photodetectors convert light intensity into electrical signals for measurement or data decoding.';
+    default: return 'This component is part of the interferometer used in communications and sensing.';
+  }
+}
+
+/* ========= UI updates ========= */
+function updateVals(){
+  phiVal.textContent = (parseInt(phiSlider.value)/100.0).toFixed(2);
+  tempVal.textContent = tempSlider.value;
+  voltVal.textContent = voltSlider.value;
+}
+
+/* attach slider events */
+phiSlider.addEventListener('input', ()=>{
+  updateVals();
+});
+tempSlider.addEventListener('input', updateVals);
+voltSlider.addEventListener('input', updateVals);
+
+/* ========= Animation loop ========= */
+function step(){
+  // update
+  updateVals();
+  drawScene();
+  requestAnimationFrame(step);
+}
+step();
+
+</script>
+</body>
+</html>
